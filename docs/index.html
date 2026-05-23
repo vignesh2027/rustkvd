@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>rustkvd — Production-grade Distributed Key-Value Store in Rust</title>
+  <meta name="description" content="rustkvd is a production-grade distributed key-value store written in Rust. Raft consensus, LSM storage, consistent hashing, MVCC, and gRPC API."/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --accent: #ff6b35;
+      --yellow: #f7c948;
+      --blue: #4A90D9;
+      --green: #4CAF50;
+      --orange: #E8913A;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mono: 'Menlo', 'Monaco', 'Courier New', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ===== NAV ===== */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 2rem; height: 56px;
+      background: rgba(13,17,23,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-size: 1.1rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--yellow));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-links { display: flex; gap: 1.5rem; list-style: none; }
+    .nav-links a {
+      color: var(--muted); text-decoration: none; font-size: 0.875rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ===== HERO ===== */
+    #hero {
+      position: relative; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; text-align: center;
+      padding: 7rem 2rem 4rem;
+      overflow: hidden;
+    }
+    #hero-canvas {
+      position: absolute; inset: 0; z-index: 0;
+      pointer-events: none;
+    }
+    .hero-content { position: relative; z-index: 1; max-width: 900px; }
+
+    .hero-title {
+      font-size: clamp(4rem, 10vw, 7rem);
+      font-weight: 900; letter-spacing: -2px; line-height: 1;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--yellow) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 1rem;
+      animation: fadeDown 0.8s ease both;
+    }
+    .hero-subtitle {
+      font-size: clamp(1.1rem, 3vw, 1.5rem);
+      font-weight: 600; color: var(--text);
+      margin-bottom: 0.75rem;
+      animation: fadeDown 0.8s 0.15s ease both;
+    }
+    .hero-tagline {
+      font-size: 0.95rem; color: var(--muted);
+      font-family: var(--mono); letter-spacing: 0.5px;
+      margin-bottom: 2rem;
+      animation: fadeDown 0.8s 0.3s ease both;
+    }
+    .hero-tagline span { color: var(--accent); }
+
+    .badge-row {
+      display: flex; flex-wrap: wrap; gap: 0.5rem;
+      justify-content: center; margin-bottom: 2.5rem;
+      animation: fadeDown 0.8s 0.45s ease both;
+    }
+    .badge-row img { height: 22px; border-radius: 4px; }
+
+    .cta-row {
+      display: flex; flex-wrap: wrap; gap: 1rem;
+      justify-content: center;
+      animation: fadeDown 0.8s 0.6s ease both;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 1.75rem; border-radius: 8px;
+      font-size: 0.95rem; font-weight: 600; text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: pointer; border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--yellow));
+      color: #0d1117;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,107,53,0.35); }
+    .btn-secondary {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
+
+    /* ===== STATS BAR ===== */
+    #stats {
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 1rem;
+    }
+    .stats-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; flex-wrap: wrap; justify-content: space-around; gap: 1.5rem;
+    }
+    .stat-item { text-align: center; min-width: 140px; }
+    .stat-num {
+      font-size: 2.2rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--yellow));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; display: block; line-height: 1.1;
+    }
+    .stat-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 0.25rem; }
+
+    /* ===== SECTION COMMONS ===== */
+    section { padding: 5rem 2rem; }
+    .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.75rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 2px;
+      color: var(--accent); margin-bottom: 0.5rem;
+    }
+    .section-title {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 800; color: var(--text); margin-bottom: 1rem;
+    }
+    .section-desc { color: var(--muted); max-width: 600px; margin-bottom: 3rem; }
+
+    /* reveal animation */
+    .reveal {
+      opacity: 0; transform: translateY(30px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ===== TERMINAL ===== */
+    #terminal-section { background: #080c10; }
+    .terminal-wrap {
+      max-width: 820px; margin: 0 auto;
+      border-radius: 12px; overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+      border: 1px solid var(--border);
+    }
+    .terminal-bar {
+      background: #2d2d2d; padding: 0.75rem 1rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .tb-dot {
+      width: 13px; height: 13px; border-radius: 50%;
+    }
+    .tb-red { background: #ff5f57; }
+    .tb-yellow { background: #ffbd2e; }
+    .tb-green { background: #28c840; }
+    .tb-title {
+      flex: 1; text-align: center;
+      font-size: 0.8rem; color: #888; font-family: var(--mono);
+    }
+    .terminal-body {
+      background: #0d1117; padding: 1.5rem 1.5rem 2rem;
+      font-family: var(--mono); font-size: 0.85rem; line-height: 1.7;
+      min-height: 340px;
+    }
+    .term-line { display: flex; flex-wrap: wrap; gap: 0.3rem; overflow-wrap: anywhere; }
+    .term-prompt { color: #aaa; flex-shrink: 0; }
+    .term-cmd { color: #e6edf3; }
+    .term-str { color: var(--yellow); }
+    .term-ok { color: var(--green); }
+    .term-ver { color: var(--yellow); }
+    .term-key { color: var(--accent); }
+    .term-val { color: var(--blue); }
+    .term-leader { color: var(--accent); }
+    .term-muted { color: var(--muted); }
+    .term-out { color: #e6edf3; }
+
+    /* typing animation */
+    .term-typed {
+      overflow: hidden;
+      white-space: pre;
+      width: 0;
+      animation: typing linear forwards;
+    }
+    @keyframes typing {
+      to { width: 100%; }
+    }
+
+    .term-block { margin-bottom: 1rem; }
+    .term-result { opacity: 0; transition: opacity 0.3s; }
+    .term-result.show { opacity: 1; }
+
+    .cursor-blink {
+      display: inline-block; width: 8px; height: 1em;
+      background: var(--text); vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+      margin-left: 2px;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* ===== ARCHITECTURE ===== */
+    #architecture { background: var(--bg); }
+    .arch-svg-wrap {
+      width: 100%; overflow-x: auto;
+      border-radius: 12px; border: 1px solid var(--border);
+      background: var(--card-bg);
+      padding: 1rem;
+    }
+    .arch-svg-wrap svg { min-width: 860px; }
+
+    /* ===== FEATURES ===== */
+    #features { background: #080c10; }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.25rem;
+    }
+    .feature-card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.75rem;
+      transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+      box-shadow: 0 12px 40px rgba(255,107,53,0.15);
+    }
+    .feature-icon {
+      width: 44px; height: 44px; margin-bottom: 1rem;
+    }
+    .feature-title {
+      font-size: 1.05rem; font-weight: 700; color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    .feature-desc { font-size: 0.875rem; color: var(--muted); line-height: 1.65; }
+
+    /* ===== RAFT TIMELINE ===== */
+    #how-raft { background: var(--bg); }
+    .raft-steps {
+      display: flex; flex-direction: column; gap: 2rem;
+      position: relative;
+    }
+    .raft-steps::before {
+      content: ''; position: absolute; left: 22px; top: 0; bottom: 0;
+      width: 2px; background: linear-gradient(to bottom, var(--accent), var(--yellow));
+    }
+    .raft-step {
+      display: flex; gap: 1.5rem;
+      padding: 1.5rem; border-radius: 10px;
+      background: var(--card-bg); border: 1px solid var(--border);
+      position: relative;
+    }
+    .raft-step-num {
+      width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), var(--yellow));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.1rem; color: #0d1117;
+      position: relative; z-index: 1;
+    }
+    .raft-step-body {}
+    .raft-step-title { font-weight: 700; font-size: 1.05rem; margin-bottom: 0.35rem; }
+    .raft-step-desc { color: var(--muted); font-size: 0.875rem; line-height: 1.65; }
+    .raft-step-tag {
+      display: inline-block; font-size: 0.72rem; font-family: var(--mono);
+      background: rgba(255,107,53,0.15); color: var(--accent);
+      border: 1px solid rgba(255,107,53,0.3); border-radius: 4px;
+      padding: 0.1rem 0.5rem; margin-top: 0.5rem; margin-right: 0.4rem;
+    }
+
+    /* ===== CODE TABS ===== */
+    #code-snippets { background: #080c10; }
+    .tab-bar {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .tab-btn {
+      padding: 0.65rem 1.5rem;
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: var(--muted); font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; transition: color 0.2s, border-color 0.2s;
+      font-family: var(--font);
+    }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-btn:hover { color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .code-wrap {
+      border-radius: 0 0 10px 10px; overflow: hidden;
+      border: 1px solid var(--border); border-top: none;
+    }
+    .code-wrap pre { margin: 0; }
+    .code-wrap pre code { font-size: 0.875rem !important; line-height: 1.65 !important; }
+
+    /* ===== QUICK START ===== */
+    #quickstart { background: var(--bg); }
+    .qs-block {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; margin-bottom: 1rem;
+    }
+    .qs-header {
+      background: #1c2128; padding: 0.6rem 1rem;
+      display: flex; align-items: center; gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .qs-label { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); }
+    .qs-body {
+      padding: 1rem 1.5rem; font-family: var(--mono); font-size: 0.85rem; line-height: 2;
+    }
+    .qs-prompt { color: var(--muted); margin-right: 0.5rem; }
+    .qs-cmd { color: var(--text); }
+    .qs-comment { color: var(--muted); font-style: italic; }
+
+    /* ===== FOOTER ===== */
+    footer {
+      background: var(--card-bg); border-top: 1px solid var(--border);
+      padding: 2.5rem 2rem; text-align: center;
+    }
+    .footer-logo {
+      font-size: 1.3rem; font-weight: 800; letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent), var(--yellow));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 0.75rem;
+    }
+    .footer-desc { color: var(--muted); font-size: 0.875rem; }
+    .footer-links { display: flex; justify-content: center; gap: 1.5rem; margin-top: 1.25rem; flex-wrap: wrap; }
+    .footer-links a { color: var(--muted); text-decoration: none; font-size: 0.85rem; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--accent); }
+
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 700px) {
+      nav { padding: 0 1rem; }
+      .nav-links { display: none; }
+      .hero-tagline { font-size: 0.8rem; }
+      section { padding: 3.5rem 1.25rem; }
+      .raft-steps::before { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">rustkvd</div>
+  <ul class="nav-links">
+    <li><a href="#terminal-section">Demo</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how-raft">Raft</a></li>
+    <li><a href="#code-snippets">API</a></li>
+    <li><a href="#quickstart">Quick Start</a></li>
+    <li><a href="https://github.com/vignesh2027/rustkvd" target="_blank" rel="noopener">GitHub ↗</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-content">
+    <h1 class="hero-title">rustkvd</h1>
+    <p class="hero-subtitle">Production-grade Distributed Key-Value Store in Rust</p>
+    <p class="hero-tagline">
+      <span>Raft consensus</span> · <span>LSM storage</span> · <span>Consistent hashing</span> · <span>MVCC</span> · <span>gRPC</span>
+    </p>
+    <div class="badge-row">
+      <img src="https://img.shields.io/github/actions/workflow/status/vignesh2027/rustkvd/ci.yml?branch=main&label=build&style=flat-square&logo=github" alt="Build Status"/>
+      <img src="https://img.shields.io/badge/rust-1.75%2B-orange?style=flat-square&logo=rust" alt="Rust Version"/>
+      <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License MIT"/>
+      <img src="https://img.shields.io/badge/gRPC-Tonic-5e81ac?style=flat-square&logo=grpc" alt="gRPC"/>
+      <img src="https://img.shields.io/badge/consensus-Raft-E8913A?style=flat-square" alt="Raft"/>
+    </div>
+    <div class="cta-row">
+      <a href="https://github.com/vignesh2027/rustkvd" target="_blank" rel="noopener" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+      <a href="#architecture" class="btn btn-secondary">Read the Docs</a>
+    </div>
+  </div>
+</section>
+
+<!-- STATS BAR -->
+<div id="stats">
+  <div class="stats-inner">
+    <div class="stat-item">
+      <span class="stat-num" data-target="840">0</span><span class="stat-num" style="font-size:1.2rem">K</span>
+      <div class="stat-label">reads / sec</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num" data-target="210">0</span><span class="stat-num" style="font-size:1.2rem">K</span>
+      <div class="stat-label">writes / sec</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num">&lt;5ms</span>
+      <div class="stat-label">p99 latency</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num">Zero</span>
+      <div class="stat-label">GC pauses</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num" data-target="150">0</span>
+      <div class="stat-label">virtual nodes</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num">RF=3</span>
+      <div class="stat-label">replication factor</div>
+    </div>
+  </div>
+</div>
+
+<!-- TERMINAL DEMO -->
+<section id="terminal-section">
+  <div class="section-inner">
+    <p class="section-label reveal">Live Demo</p>
+    <h2 class="section-title reveal">See it in action</h2>
+    <p class="section-desc reveal">A real rustkvd-cli session against a 3-node local cluster.</p>
+    <div class="reveal">
+      <div class="terminal-wrap">
+        <div class="terminal-bar">
+          <div class="tb-dot tb-red"></div>
+          <div class="tb-dot tb-yellow"></div>
+          <div class="tb-dot tb-green"></div>
+          <div class="tb-title">rustkvd-cli — zsh</div>
+        </div>
+        <div class="terminal-body" id="term-body">
+          <!-- Lines injected by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <div class="section-inner">
+    <p class="section-label reveal">Deep Dive</p>
+    <h2 class="section-title reveal">System Architecture</h2>
+    <p class="section-desc reveal">Three-node cluster with gRPC ingress, Raft consensus, LSM storage, and a consistent hash ring for data placement.</p>
+    <div class="arch-svg-wrap reveal">
+      <svg width="100%" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-width:860px;">
+        <!-- Background -->
+        <rect width="900" height="600" fill="#0d1117" rx="12"/>
+
+        <!-- Title -->
+        <text x="450" y="38" text-anchor="middle" fill="#e6edf3" font-size="18" font-weight="700" letter-spacing="2">rustkvd — System Architecture</text>
+
+        <!-- ===== CLIENTS ===== -->
+        <rect x="60" y="65" width="130" height="52" rx="8" fill="#161b22" stroke="#4A90D9" stroke-width="1.5"/>
+        <text x="125" y="86" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="600">CLIENT</text>
+        <text x="125" y="103" text-anchor="middle" fill="#8b949e" font-size="10">rustkvd-cli</text>
+
+        <rect x="385" y="65" width="130" height="52" rx="8" fill="#161b22" stroke="#4A90D9" stroke-width="1.5"/>
+        <text x="450" y="86" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="600">CLIENT</text>
+        <text x="450" y="103" text-anchor="middle" fill="#8b949e" font-size="10">SDK / gRPC</text>
+
+        <rect x="710" y="65" width="130" height="52" rx="8" fill="#161b22" stroke="#4A90D9" stroke-width="1.5"/>
+        <text x="775" y="86" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="600">CLIENT</text>
+        <text x="775" y="103" text-anchor="middle" fill="#8b949e" font-size="10">HTTP Gateway</text>
+
+        <!-- client → gRPC arrows -->
+        <line x1="125" y1="117" x2="125" y2="155" stroke="#4A90D9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#aBlue)"/>
+        <line x1="450" y1="117" x2="450" y2="155" stroke="#4A90D9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#aBlue)"/>
+        <line x1="775" y1="117" x2="775" y2="155" stroke="#4A90D9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#aBlue)"/>
+
+        <!-- ===== gRPC LAYER ===== -->
+        <rect x="30" y="155" width="190" height="44" rx="6" fill="#0f2a44" stroke="#4A90D9" stroke-width="2"/>
+        <text x="125" y="172" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="700">gRPC Layer</text>
+        <text x="125" y="188" text-anchor="middle" fill="#8b949e" font-size="9">Tonic · Prost · TLS</text>
+
+        <rect x="355" y="155" width="190" height="44" rx="6" fill="#0f2a44" stroke="#4A90D9" stroke-width="2"/>
+        <text x="450" y="172" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="700">gRPC Layer</text>
+        <text x="450" y="188" text-anchor="middle" fill="#8b949e" font-size="9">Tonic · Prost · TLS</text>
+
+        <rect x="680" y="155" width="190" height="44" rx="6" fill="#0f2a44" stroke="#4A90D9" stroke-width="2"/>
+        <text x="775" y="172" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="700">gRPC Layer</text>
+        <text x="775" y="188" text-anchor="middle" fill="#8b949e" font-size="9">Tonic · Prost · TLS</text>
+
+        <!-- gRPC → Raft -->
+        <line x1="125" y1="199" x2="125" y2="233" stroke="#8b949e" stroke-width="1.5" marker-end="url(#aGray)"/>
+        <line x1="450" y1="199" x2="450" y2="233" stroke="#8b949e" stroke-width="1.5" marker-end="url(#aGray)"/>
+        <line x1="775" y1="199" x2="775" y2="233" stroke="#8b949e" stroke-width="1.5" marker-end="url(#aGray)"/>
+
+        <!-- ===== NODE OUTER BOXES ===== -->
+        <rect x="18" y="233" width="214" height="295" rx="10" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <text x="125" y="523" text-anchor="middle" fill="#ff6b35" font-size="11" font-weight="700">NODE 1 — LEADER</text>
+
+        <rect x="343" y="233" width="214" height="295" rx="10" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <text x="450" y="523" text-anchor="middle" fill="#8b949e" font-size="11" font-weight="600">NODE 2 — FOLLOWER</text>
+
+        <rect x="668" y="233" width="214" height="295" rx="10" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <text x="775" y="523" text-anchor="middle" fill="#8b949e" font-size="11" font-weight="600">NODE 3 — FOLLOWER</text>
+
+        <!-- ===== RAFT LAYER ===== -->
+        <rect x="30" y="240" width="190" height="68" rx="6" fill="#2a1a0a" stroke="#E8913A" stroke-width="2"/>
+        <text x="125" y="260" text-anchor="middle" fill="#E8913A" font-size="11" font-weight="700">Raft Consensus</text>
+        <text x="125" y="276" text-anchor="middle" fill="#8b949e" font-size="9">Term: 3 | Role: Leader</text>
+        <text x="125" y="291" text-anchor="middle" fill="#8b949e" font-size="9">Committed: 1247 | Applied: 1247</text>
+
+        <rect x="355" y="240" width="190" height="68" rx="6" fill="#2a1a0a" stroke="#E8913A" stroke-width="2"/>
+        <text x="450" y="260" text-anchor="middle" fill="#E8913A" font-size="11" font-weight="700">Raft Consensus</text>
+        <text x="450" y="276" text-anchor="middle" fill="#8b949e" font-size="9">Term: 3 | Role: Follower</text>
+        <text x="450" y="291" text-anchor="middle" fill="#8b949e" font-size="9">Committed: 1247 | Applied: 1247</text>
+
+        <rect x="680" y="240" width="190" height="68" rx="6" fill="#2a1a0a" stroke="#E8913A" stroke-width="2"/>
+        <text x="775" y="260" text-anchor="middle" fill="#E8913A" font-size="11" font-weight="700">Raft Consensus</text>
+        <text x="775" y="276" text-anchor="middle" fill="#8b949e" font-size="9">Term: 3 | Role: Follower</text>
+        <text x="775" y="291" text-anchor="middle" fill="#8b949e" font-size="9">Committed: 1247 | Applied: 1247</text>
+
+        <!-- Raft replication arrows -->
+        <path d="M 220 268 Q 287 255 355 268" fill="none" stroke="#E8913A" stroke-width="1.8" marker-end="url(#aOrange)"/>
+        <text x="287" y="252" text-anchor="middle" fill="#E8913A" font-size="8">AppendEntries</text>
+        <path d="M 355 282 Q 287 295 220 282" fill="none" stroke="#f7c948" stroke-width="1.2" marker-end="url(#aYellow)" stroke-dasharray="3,2"/>
+        <text x="287" y="303" text-anchor="middle" fill="#f7c948" font-size="7">ACK</text>
+
+        <path d="M 545 268 Q 612 255 680 268" fill="none" stroke="#E8913A" stroke-width="1.8" marker-end="url(#aOrange)"/>
+        <text x="612" y="252" text-anchor="middle" fill="#E8913A" font-size="8">AppendEntries</text>
+        <path d="M 680 282 Q 612 295 545 282" fill="none" stroke="#f7c948" stroke-width="1.2" marker-end="url(#aYellow)" stroke-dasharray="3,2"/>
+        <text x="612" y="303" text-anchor="middle" fill="#f7c948" font-size="7">ACK</text>
+
+        <!-- Raft → Storage -->
+        <line x1="125" y1="308" x2="125" y2="333" stroke="#8b949e" stroke-width="1.5" marker-end="url(#aGray)"/>
+        <line x1="450" y1="308" x2="450" y2="333" stroke="#8b949e" stroke-width="1.5" marker-end="url(#aGray)"/>
+        <line x1="775" y1="308" x2="775" y2="333" stroke="#8b949e" stroke-width="1.5" marker-end="url(#aGray)"/>
+
+        <!-- ===== LSM STORAGE ===== -->
+        <!-- Node 1 -->
+        <rect x="30" y="333" width="190" height="165" rx="6" fill="#0a2010" stroke="#4CAF50" stroke-width="2"/>
+        <text x="125" y="354" text-anchor="middle" fill="#4CAF50" font-size="11" font-weight="700">LSM Storage Engine</text>
+        <rect x="42" y="362" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+        <text x="125" y="376" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">WAL (Write-Ahead Log)</text>
+        <text x="125" y="389" text-anchor="middle" fill="#8b949e" font-size="8">CRC32 checksums + fsync</text>
+        <rect x="42" y="400" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+        <text x="125" y="414" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">MemTable (BTreeMap)</text>
+        <text x="125" y="427" text-anchor="middle" fill="#8b949e" font-size="8">In-memory writes + MVCC</text>
+        <rect x="42" y="438" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+        <text x="125" y="452" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">SSTables (Bloom filtered)</text>
+        <text x="125" y="465" text-anchor="middle" fill="#8b949e" font-size="8">Background compaction</text>
+        <text x="125" y="490" text-anchor="middle" fill="#8b949e" font-size="8" font-style="italic">Compaction thread running...</text>
+
+        <!-- Node 2 -->
+        <rect x="355" y="333" width="190" height="165" rx="6" fill="#0a2010" stroke="#4CAF50" stroke-width="2"/>
+        <text x="450" y="354" text-anchor="middle" fill="#4CAF50" font-size="11" font-weight="700">LSM Storage Engine</text>
+        <rect x="367" y="362" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+        <text x="450" y="376" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">WAL (Write-Ahead Log)</text>
+        <text x="450" y="389" text-anchor="middle" fill="#8b949e" font-size="8">CRC32 checksums + fsync</text>
+        <rect x="367" y="400" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+        <text x="450" y="414" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">MemTable (BTreeMap)</text>
+        <text x="450" y="427" text-anchor="middle" fill="#8b949e" font-size="8">In-memory writes + MVCC</text>
+        <rect x="367" y="438" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+        <text x="450" y="452" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">SSTables (Bloom filtered)</text>
+        <text x="450" y="465" text-anchor="middle" fill="#8b949e" font-size="8">Background compaction</text>
+        <text x="450" y="490" text-anchor="middle" fill="#8b949e" font-size="8" font-style="italic">Compaction thread running...</text>
+
+        <!-- Node 3 -->
+        <rect x="680" y="333" width="190" height="165" rx="6" fill="#0a2010" stroke="#4CAF50" stroke-width="2"/>
+        <text x="775" y="354" text-anchor="middle" fill="#4CAF50" font-size="11" font-weight="700">LSM Storage Engine</text>
+        <rect x="692" y="362" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+        <text x="775" y="376" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">WAL (Write-Ahead Log)</text>
+        <text x="775" y="389" text-anchor="middle" fill="#8b949e" font-size="8">CRC32 checksums + fsync</text>
+        <rect x="692" y="400" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+        <text x="775" y="414" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">MemTable (BTreeMap)</text>
+        <text x="775" y="427" text-anchor="middle" fill="#8b949e" font-size="8">In-memory writes + MVCC</text>
+        <rect x="692" y="438" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+        <text x="775" y="452" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">SSTables (Bloom filtered)</text>
+        <text x="775" y="465" text-anchor="middle" fill="#8b949e" font-size="8">Background compaction</text>
+        <text x="775" y="490" text-anchor="middle" fill="#8b949e" font-size="8" font-style="italic">Compaction thread running...</text>
+
+        <!-- Hash ring -->
+        <ellipse cx="450" cy="395" rx="430" ry="210" fill="none" stroke="#f7c948" stroke-width="1.2" stroke-dasharray="8,5" opacity="0.35"/>
+        <text x="450" y="565" text-anchor="middle" fill="#f7c948" font-size="10" opacity="0.7">Consistent Hash Ring — 150 virtual nodes · RF=3 · SHA-256 placement</text>
+
+        <!-- Legend -->
+        <rect x="18" y="543" width="10" height="10" rx="2" fill="#4A90D9"/>
+        <text x="33" y="552" fill="#8b949e" font-size="9">gRPC</text>
+        <rect x="75" y="543" width="10" height="10" rx="2" fill="#E8913A"/>
+        <text x="90" y="552" fill="#8b949e" font-size="9">Raft</text>
+        <rect x="120" y="543" width="10" height="10" rx="2" fill="#4CAF50"/>
+        <text x="135" y="552" fill="#8b949e" font-size="9">LSM Storage</text>
+        <rect x="205" y="543" width="10" height="10" rx="2" fill="#f7c948"/>
+        <text x="220" y="552" fill="#8b949e" font-size="9">Hash Ring</text>
+        <rect x="275" y="543" width="10" height="10" rx="2" fill="#ff6b35"/>
+        <text x="290" y="552" fill="#8b949e" font-size="9">Leader</text>
+
+        <defs>
+          <marker id="aBlue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#4A90D9"/>
+          </marker>
+          <marker id="aOrange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#E8913A"/>
+          </marker>
+          <marker id="aYellow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#f7c948"/>
+          </marker>
+          <marker id="aGray" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#8b949e"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="section-inner">
+    <p class="section-label reveal">What's inside</p>
+    <h2 class="section-title reveal">Built for production</h2>
+    <p class="section-desc reveal">Every component is designed for correctness, performance, and operational simplicity.</p>
+    <div class="features-grid">
+
+      <!-- Raft -->
+      <div class="feature-card reveal">
+        <svg class="feature-icon" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22 4L38 12V32L22 40L6 32V12L22 4Z" stroke="#ff6b35" stroke-width="2" fill="rgba(255,107,53,0.08)"/>
+          <path d="M22 4L38 12" stroke="#ff6b35" stroke-width="1.5" opacity="0.4"/>
+          <path d="M22 4L6 12" stroke="#ff6b35" stroke-width="1.5" opacity="0.4"/>
+          <circle cx="22" cy="22" r="6" fill="#ff6b35" opacity="0.9"/>
+          <path d="M22 18v4l3 2" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <div class="feature-title">Raft Consensus</div>
+        <div class="feature-desc">Leader election in &lt;5ms. Log replication with quorum writes. InstallSnapshot for lagging followers. Linearizable reads via committed log index.</div>
+      </div>
+
+      <!-- LSM -->
+      <div class="feature-card reveal">
+        <svg class="feature-icon" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="8" width="28" height="8" rx="2" fill="#4CAF50" opacity="0.9"/>
+          <rect x="8" y="19" width="28" height="8" rx="2" fill="#4CAF50" opacity="0.65"/>
+          <rect x="8" y="30" width="28" height="8" rx="2" fill="#4CAF50" opacity="0.4"/>
+          <line x1="22" y1="16" x2="22" y2="19" stroke="#4CAF50" stroke-width="1.5" opacity="0.6"/>
+          <line x1="22" y1="27" x2="22" y2="30" stroke="#4CAF50" stroke-width="1.5" opacity="0.6"/>
+        </svg>
+        <div class="feature-title">LSM Storage Engine</div>
+        <div class="feature-desc">WAL with CRC32 checksums + fsync. MemTable backed by BTreeMap. Bloom-filtered SSTables for fast negative lookups. Background compaction thread.</div>
+      </div>
+
+      <!-- Consistent Hashing -->
+      <div class="feature-card reveal">
+        <svg class="feature-icon" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="22" cy="22" r="15" stroke="#f7c948" stroke-width="2" fill="none" stroke-dasharray="4,3"/>
+          <circle cx="22" cy="7" r="4" fill="#f7c948"/>
+          <circle cx="35" cy="29" r="4" fill="#f7c948"/>
+          <circle cx="9" cy="29" r="4" fill="#f7c948"/>
+          <circle cx="22" cy="22" r="3" fill="#f7c948" opacity="0.5"/>
+        </svg>
+        <div class="feature-title">Consistent Hashing</div>
+        <div class="feature-desc">150 virtual nodes per physical node. SHA-256 key placement. Replication factor 3. Automatic rebalancing on node join/leave with minimal data movement.</div>
+      </div>
+
+      <!-- MVCC -->
+      <div class="feature-card reveal">
+        <svg class="feature-icon" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="22" cy="22" r="15" stroke="#4A90D9" stroke-width="2" fill="none"/>
+          <path d="M22 12v10l7 4" stroke="#4A90D9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="22" cy="22" r="2" fill="#4A90D9"/>
+          <path d="M10 8l4 4M34 8l-4 4" stroke="#4A90D9" stroke-width="1.2" opacity="0.4"/>
+        </svg>
+        <div class="feature-title">MVCC</div>
+        <div class="feature-desc">Every write gets a monotonic u64 version stamp. Snapshot reads at any past version. Garbage collect old versions below the global watermark.</div>
+      </div>
+
+      <!-- gRPC -->
+      <div class="feature-card reveal">
+        <svg class="feature-icon" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8" cy="22" r="5" fill="#4A90D9" opacity="0.9"/>
+          <circle cx="36" cy="12" r="5" fill="#4A90D9" opacity="0.9"/>
+          <circle cx="36" cy="32" r="5" fill="#4A90D9" opacity="0.9"/>
+          <line x1="13" y1="22" x2="31" y2="14" stroke="#4A90D9" stroke-width="1.5" marker-end="url(#arr1)"/>
+          <line x1="13" y1="22" x2="31" y2="30" stroke="#4A90D9" stroke-width="1.5" marker-end="url(#arr1)"/>
+          <line x1="31" y1="14" x2="13" y2="22" stroke="#4A90D9" stroke-width="1" stroke-dasharray="2,2" opacity="0.5"/>
+          <line x1="31" y1="30" x2="13" y2="22" stroke="#4A90D9" stroke-width="1" stroke-dasharray="2,2" opacity="0.5"/>
+          <defs><marker id="arr1" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#4A90D9"/></marker></defs>
+        </svg>
+        <div class="feature-title">gRPC API</div>
+        <div class="feature-desc">Get, Put, Delete, Scan, streaming Watch, NodeStatus. Built on Tonic + Prost. Automatic redirect on NotLeader error. Bidirectional streaming Watch events.</div>
+      </div>
+
+      <!-- Zero GC -->
+      <div class="feature-card reveal">
+        <svg class="feature-icon" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Rust crab approximation -->
+          <ellipse cx="22" cy="23" rx="10" ry="8" fill="#E8913A" opacity="0.9"/>
+          <!-- claws -->
+          <path d="M12 23 Q6 18 7 13 Q10 13 11 17" stroke="#E8913A" stroke-width="1.8" fill="none"/>
+          <path d="M32 23 Q38 18 37 13 Q34 13 33 17" stroke="#E8913A" stroke-width="1.8" fill="none"/>
+          <!-- legs -->
+          <line x1="14" y1="27" x2="9" y2="33" stroke="#E8913A" stroke-width="1.5"/>
+          <line x1="17" y1="30" x2="14" y2="36" stroke="#E8913A" stroke-width="1.5"/>
+          <line x1="27" y1="30" x2="30" y2="36" stroke="#E8913A" stroke-width="1.5"/>
+          <line x1="30" y1="27" x2="35" y2="33" stroke="#E8913A" stroke-width="1.5"/>
+          <!-- eyes -->
+          <circle cx="18" cy="20" r="2" fill="white"/>
+          <circle cx="26" cy="20" r="2" fill="white"/>
+          <circle cx="18.8" cy="20.3" r="1" fill="#0d1117"/>
+          <circle cx="26.8" cy="20.3" r="1" fill="#0d1117"/>
+        </svg>
+        <div class="feature-title">Zero GC — Rust Ownership</div>
+        <div class="feature-desc">No garbage collector, no stop-the-world pauses, no data races. Rust's ownership model guarantees memory and concurrency safety at compile time.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- HOW RAFT WORKS -->
+<section id="how-raft">
+  <div class="section-inner">
+    <p class="section-label reveal">Under the hood</p>
+    <h2 class="section-title reveal">How Raft Works</h2>
+    <p class="section-desc reveal">Raft is a consensus algorithm designed for understandability. Here's how it guarantees consistency across the cluster.</p>
+    <div class="raft-steps">
+
+      <div class="raft-step reveal">
+        <div class="raft-step-num">1</div>
+        <div class="raft-step-body">
+          <div class="raft-step-title">Leader Election</div>
+          <div class="raft-step-desc">
+            When a follower's election timer fires without hearing from a leader, it increments its term and becomes a candidate. It sends <code>RequestVote</code> RPCs to all peers. If it receives votes from a majority of nodes, it becomes the new leader and immediately sends heartbeat <code>AppendEntries</code> to assert authority.
+          </div>
+          <span class="raft-step-tag">election_timeout: 150–300ms</span>
+          <span class="raft-step-tag">heartbeat_interval: 50ms</span>
+          <span class="raft-step-tag">quorum = ⌊N/2⌋ + 1</span>
+        </div>
+      </div>
+
+      <div class="raft-step reveal">
+        <div class="raft-step-num">2</div>
+        <div class="raft-step-body">
+          <div class="raft-step-title">Log Replication</div>
+          <div class="raft-step-desc">
+            All writes go to the leader. The leader appends the entry to its log, then sends <code>AppendEntries</code> RPCs to all followers in parallel. Once a majority acknowledges the entry, the leader commits it (advances <code>commit_index</code>) and applies it to the state machine. The response is sent to the client only after commit.
+          </div>
+          <span class="raft-step-tag">write → leader log</span>
+          <span class="raft-step-tag">parallel replication</span>
+          <span class="raft-step-tag">quorum ACK → commit</span>
+          <span class="raft-step-tag">apply → LSM</span>
+        </div>
+      </div>
+
+      <div class="raft-step reveal">
+        <div class="raft-step-num">3</div>
+        <div class="raft-step-body">
+          <div class="raft-step-title">Safety Guarantees</div>
+          <div class="raft-step-desc">
+            Raft guarantees: <strong>Log Matching</strong> — if two logs have an entry with the same index and term, all preceding entries are identical. <strong>Leader Completeness</strong> — a leader always has all committed entries. <strong>State Machine Safety</strong> — all nodes apply the same log entries in the same order, guaranteeing linearizability.
+          </div>
+          <span class="raft-step-tag">log matching</span>
+          <span class="raft-step-tag">leader completeness</span>
+          <span class="raft-step-tag">linearizability</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- CODE SNIPPETS -->
+<section id="code-snippets">
+  <div class="section-inner">
+    <p class="section-label reveal">Developer API</p>
+    <h2 class="section-title reveal">Simple, ergonomic client</h2>
+    <p class="section-desc reveal">The Rust client library is async-first, built on Tokio. Three lines to read, write, or stream.</p>
+    <div class="reveal">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab(this,'tab-put')">Put</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-get')">Get</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-watch')">Watch</button>
+      </div>
+      <div class="code-wrap">
+        <div class="tab-panel active" id="tab-put">
+          <pre><code class="language-rust">use rustkvd_client::Client;
+
+#[tokio::main]
+async fn main() -> anyhow::Result&lt;()&gt; {
+    let client = Client::connect("http://localhost:7001").await?;
+
+    // Put — returns the MVCC version assigned to this write
+    let version = client
+        .put("user:1001", b"Alice".to_vec(), None)
+        .await?;
+
+    println!("Written at version {}", version);
+    // Output: Written at version 42
+
+    Ok(())
+}</code></pre>
+        </div>
+        <div class="tab-panel" id="tab-get">
+          <pre><code class="language-rust">use rustkvd_client::Client;
+
+#[tokio::main]
+async fn main() -> anyhow::Result&lt;()&gt; {
+    let client = Client::connect("http://localhost:7001").await?;
+
+    // Get — optionally pass a version for snapshot reads
+    let value = client.get("user:1001", None).await?;
+
+    match value {
+        Some(bytes) => println!("{}", String::from_utf8_lossy(&amp;bytes)),
+        None        => println!("key not found"),
+    }
+    // Output: Alice
+
+    // Snapshot read at a past version
+    let old = client.get("user:1001", Some(40)).await?;
+    println!("At v40: {:?}", old);
+
+    Ok(())
+}</code></pre>
+        </div>
+        <div class="tab-panel" id="tab-watch">
+          <pre><code class="language-rust">use rustkvd_client::{Client, EventType};
+use futures::StreamExt;
+
+#[tokio::main]
+async fn main() -> anyhow::Result&lt;()&gt; {
+    let client = Client::connect("http://localhost:7001").await?;
+
+    // Watch — streaming gRPC; receive all events under prefix
+    let mut stream = client.watch("user:").await?;
+
+    println!("Watching user: prefix...");
+    while let Some(event) = stream.next().await {
+        let event = event?;
+        match event.event_type {
+            EventType::Put    => println!("PUT  {}: {:?}", event.key, event.value),
+            EventType::Delete => println!("DEL  {}", event.key),
+        }
+    }
+
+    Ok(())
+}</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUICK START -->
+<section id="quickstart">
+  <div class="section-inner">
+    <p class="section-label reveal">Get running in minutes</p>
+    <h2 class="section-title reveal">Quick Start</h2>
+    <p class="section-desc reveal">Spin up a 3-node local cluster in three commands.</p>
+
+    <div class="qs-block reveal">
+      <div class="qs-header">
+        <span class="qs-label">Step 1 — Clone &amp; build</span>
+      </div>
+      <div class="qs-body">
+        <div><span class="qs-prompt">$</span><span class="qs-cmd">git clone https://github.com/vignesh2027/rustkvd &amp;&amp; cd rustkvd</span></div>
+        <div><span class="qs-prompt">$</span><span class="qs-cmd">cargo build --release</span></div>
+        <div style="color:var(--muted);font-size:0.8rem;margin-top:0.3rem">   Compiling rustkvd v0.1.0 ... Finished release [optimized] target(s)</div>
+      </div>
+    </div>
+
+    <div class="qs-block reveal">
+      <div class="qs-header">
+        <span class="qs-label">Step 2 — Start 3 nodes (3 terminals)</span>
+      </div>
+      <div class="qs-body">
+        <div><span class="qs-prompt"># terminal 1</span></div>
+        <div><span class="qs-prompt">$</span><span class="qs-cmd">./target/release/rustkvd --id node1 --addr 127.0.0.1:7001 \</span></div>
+        <div style="padding-left:2rem"><span class="qs-cmd">--peers 127.0.0.1:7002,127.0.0.1:7003</span></div>
+        <div style="margin-top:0.5rem"><span class="qs-prompt"># terminal 2</span></div>
+        <div><span class="qs-prompt">$</span><span class="qs-cmd">./target/release/rustkvd --id node2 --addr 127.0.0.1:7002 \</span></div>
+        <div style="padding-left:2rem"><span class="qs-cmd">--peers 127.0.0.1:7001,127.0.0.1:7003</span></div>
+        <div style="margin-top:0.5rem"><span class="qs-prompt"># terminal 3</span></div>
+        <div><span class="qs-prompt">$</span><span class="qs-cmd">./target/release/rustkvd --id node3 --addr 127.0.0.1:7003 \</span></div>
+        <div style="padding-left:2rem"><span class="qs-cmd">--peers 127.0.0.1:7001,127.0.0.1:7002</span></div>
+      </div>
+    </div>
+
+    <div class="qs-block reveal">
+      <div class="qs-header">
+        <span class="qs-label">Step 3 — Try it out</span>
+      </div>
+      <div class="qs-body">
+        <div><span class="qs-prompt">$</span><span class="qs-cmd">./target/release/rustkvd-cli --peers localhost:7001 put hello world</span></div>
+        <div style="color:var(--green)">   OK (version: 1)</div>
+        <div><span class="qs-prompt">$</span><span class="qs-cmd">./target/release/rustkvd-cli --peers localhost:7001 get hello</span></div>
+        <div style="color:var(--green)">   world</div>
+        <div><span class="qs-prompt">$</span><span class="qs-cmd">./target/release/rustkvd-cli --peers localhost:7001 status</span></div>
+        <div style="color:var(--text)">   Node: node1 | Role: <span style="color:var(--accent)">leader</span> | Term: 1</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">rustkvd</div>
+  <div class="footer-desc">Built with ❤️ and Rust &nbsp;|&nbsp; MIT License &nbsp;|&nbsp; github.com/vignesh2027/rustkvd</div>
+  <div class="footer-links">
+    <a href="https://github.com/vignesh2027/rustkvd" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/vignesh2027/rustkvd/issues" target="_blank" rel="noopener">Issues</a>
+    <a href="https://github.com/vignesh2027/rustkvd/blob/main/README.md" target="_blank" rel="noopener">README</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#quickstart">Quick Start</a>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+// ===== HIGHLIGHT.JS =====
+document.addEventListener('DOMContentLoaded', () => { hljs.highlightAll(); });
+
+// ===== CANVAS PARTICLE BG =====
+(function() {
+  const canvas = document.getElementById('hero-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() {
+    W = canvas.width = canvas.offsetWidth;
+    H = canvas.height = canvas.offsetHeight;
+  }
+
+  function Particle() {
+    this.reset();
+  }
+  Particle.prototype.reset = function() {
+    this.x = Math.random() * W;
+    this.y = Math.random() * H;
+    this.r = Math.random() * 1.8 + 0.4;
+    this.vx = (Math.random() - 0.5) * 0.35;
+    this.vy = (Math.random() - 0.5) * 0.35;
+    this.alpha = Math.random() * 0.5 + 0.1;
+    this.color = Math.random() > 0.5 ? '#ff6b35' : '#f7c948';
+  };
+  Particle.prototype.update = function() {
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.x < 0 || this.x > W || this.y < 0 || this.y > H) this.reset();
+  };
+  Particle.prototype.draw = function() {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  function init() {
+    resize();
+    particles = [];
+    for (let i = 0; i < 120; i++) particles.push(new Particle());
+  }
+
+  function loop() {
+    ctx.clearRect(0, 0, W, H);
+    // Draw faint connection lines
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const d = Math.sqrt(dx*dx + dy*dy);
+        if (d < 100) {
+          ctx.save();
+          ctx.globalAlpha = (1 - d/100) * 0.08;
+          ctx.strokeStyle = '#ff6b35';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      particles[i].update();
+      particles[i].draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', init);
+  init();
+  loop();
+})();
+
+// ===== TERMINAL TYPING ANIMATION =====
+(function() {
+  const LINES = [
+    {
+      type: 'cmd',
+      text: '$ rustkvd-cli --peers localhost:7001 put user:1001 \'{"name":"Alice","role":"admin"}\'',
+      result: [
+        { text: 'OK', color: '#4CAF50', append: ' (version: ' },
+        { text: '42', color: '#f7c948', append: ')' },
+      ]
+    },
+    {
+      type: 'cmd',
+      text: '$ rustkvd-cli --peers localhost:7001 get user:1001',
+      result: [
+        { text: '{"name":"Alice","role":"admin"}', color: '#4CAF50' },
+      ]
+    },
+    {
+      type: 'cmd',
+      text: '$ rustkvd-cli --peers localhost:7001 status',
+      result: [
+        { html: '<span style="color:#e6edf3">Node: <span style="color:#ff6b35">node1</span>  |  Role: <span style="color:#ff6b35">leader</span>  |  Term: <span style="color:#f7c948">3</span>  |  Leader: <span style="color:#ff6b35">node1</span></span>' },
+        { html: '<span style="color:#e6edf3">Committed: <span style="color:#4CAF50">1247</span>  |  Applied: <span style="color:#4CAF50">1247</span></span>' },
+        { html: '<span style="color:#e6edf3">Peers: <span style="color:#4A90D9">["localhost:7002", "localhost:7003"]</span></span>' },
+      ]
+    },
+    {
+      type: 'cmd',
+      text: '$ rustkvd-cli --peers localhost:7001 scan --prefix "user:" --limit 5',
+      result: [
+        { html: '<span style="color:#8b949e">user:1001</span> <span style="color:#30363d">=&gt;</span> <span style="color:#4CAF50">{"name":"Alice","role":"admin"}</span>' },
+        { html: '<span style="color:#8b949e">user:1002</span> <span style="color:#30363d">=&gt;</span> <span style="color:#4CAF50">{"name":"Bob","role":"viewer"}</span>' },
+        { html: '<span style="color:#8b949e">user:1003</span> <span style="color:#30363d">=&gt;</span> <span style="color:#4CAF50">{"name":"Carol","role":"editor"}</span>' },
+      ]
+    }
+  ];
+
+  const body = document.getElementById('term-body');
+
+  function typeText(el, text, speed, done) {
+    let i = 0;
+    function tick() {
+      if (i <= text.length) {
+        el.textContent = text.slice(0, i);
+        i++;
+        setTimeout(tick, speed);
+      } else if (done) done();
+    }
+    tick();
+  }
+
+  function runLine(idx, done) {
+    if (idx >= LINES.length) {
+      // Add final blinking cursor
+      const cur = document.createElement('span');
+      cur.className = 'cursor-blink';
+      body.appendChild(cur);
+      return;
+    }
+    const line = LINES[idx];
+
+    // Command line
+    const cmdDiv = document.createElement('div');
+    cmdDiv.style.fontFamily = 'var(--mono)';
+    cmdDiv.style.fontSize = '0.85rem';
+    cmdDiv.style.lineHeight = '1.7';
+    cmdDiv.style.marginBottom = '0.15rem';
+    body.appendChild(cmdDiv);
+
+    const speed = Math.max(18, 55 - line.text.length * 0.3);
+    typeText(cmdDiv, line.text, speed, () => {
+      // Show result lines
+      const resultDiv = document.createElement('div');
+      resultDiv.style.marginBottom = '1rem';
+      body.appendChild(resultDiv);
+
+      line.result.forEach((r, ri) => {
+        const row = document.createElement('div');
+        row.style.fontFamily = 'var(--mono)';
+        row.style.fontSize = '0.85rem';
+        row.style.lineHeight = '1.7';
+        if (r.html) {
+          row.innerHTML = r.html;
+        } else {
+          const span = document.createElement('span');
+          span.style.color = r.color || '#e6edf3';
+          span.textContent = r.text;
+          row.appendChild(span);
+          if (r.append) {
+            const ap = document.createElement('span');
+            ap.style.color = '#8b949e';
+            ap.textContent = r.append;
+            row.appendChild(ap);
+          }
+        }
+        row.style.opacity = '0';
+        resultDiv.appendChild(row);
+        setTimeout(() => {
+          row.style.transition = 'opacity 0.3s';
+          row.style.opacity = '1';
+        }, ri * 180 + 200);
+      });
+
+      setTimeout(() => {
+        const sep = document.createElement('div');
+        sep.style.borderBottom = '1px solid #30363d';
+        sep.style.margin = '0.5rem 0 0.75rem';
+        body.appendChild(sep);
+        runLine(idx + 1, done);
+      }, line.result.length * 180 + 600);
+    });
+  }
+
+  // Start after a brief delay
+  setTimeout(() => runLine(0, null), 800);
+})();
+
+// ===== COUNT-UP ANIMATION =====
+(function() {
+  const targets = document.querySelectorAll('.stat-num[data-target]');
+  let done = false;
+
+  function countUp(el, target, duration) {
+    const start = Date.now();
+    function frame() {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(ease * target);
+      if (progress < 1) requestAnimationFrame(frame);
+      else el.textContent = target;
+    }
+    frame();
+  }
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting && !done) {
+        done = true;
+        targets.forEach(el => countUp(el, parseInt(el.dataset.target), 1200));
+      }
+    });
+  }, { threshold: 0.3 });
+
+  const statsEl = document.getElementById('stats');
+  if (statsEl) observer.observe(statsEl);
+})();
+
+// ===== INTERSECTION OBSERVER — REVEAL =====
+(function() {
+  const els = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  els.forEach(el => observer.observe(el));
+})();
+
+// ===== TAB SWITCHING =====
+function switchTab(btn, panelId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+  // Re-highlight the newly visible code
+  document.querySelectorAll('#' + panelId + ' code').forEach(el => {
+    hljs.highlightElement(el);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+  <!-- Background -->
+  <rect width="900" height="600" fill="#0d1117" rx="12"/>
+
+  <!-- Title -->
+  <text x="450" y="38" text-anchor="middle" fill="#e6edf3" font-size="18" font-weight="700" letter-spacing="2">rustkvd — System Architecture</text>
+
+  <!-- ===== CLIENTS (top row) ===== -->
+  <!-- Client 1 -->
+  <rect x="60" y="65" width="130" height="52" rx="8" fill="#161b22" stroke="#4A90D9" stroke-width="1.5"/>
+  <text x="125" y="86" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="600">CLIENT</text>
+  <text x="125" y="103" text-anchor="middle" fill="#8b949e" font-size="10">rustkvd-cli</text>
+
+  <!-- Client 2 -->
+  <rect x="385" y="65" width="130" height="52" rx="8" fill="#161b22" stroke="#4A90D9" stroke-width="1.5"/>
+  <text x="450" y="86" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="600">CLIENT</text>
+  <text x="450" y="103" text-anchor="middle" fill="#8b949e" font-size="10">SDK / gRPC</text>
+
+  <!-- Client 3 -->
+  <rect x="710" y="65" width="130" height="52" rx="8" fill="#161b22" stroke="#4A90D9" stroke-width="1.5"/>
+  <text x="775" y="86" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="600">CLIENT</text>
+  <text x="775" y="103" text-anchor="middle" fill="#8b949e" font-size="10">HTTP Gateway</text>
+
+  <!-- Client arrows to gRPC row -->
+  <line x1="125" y1="117" x2="125" y2="155" stroke="#4A90D9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowBlue)"/>
+  <line x1="450" y1="117" x2="450" y2="155" stroke="#4A90D9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowBlue)"/>
+  <line x1="775" y1="117" x2="775" y2="155" stroke="#4A90D9" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowBlue)"/>
+
+  <!-- ===== gRPC LAYER ===== -->
+  <!-- gRPC Node 1 -->
+  <rect x="30" y="155" width="190" height="44" rx="6" fill="#0f2a44" stroke="#4A90D9" stroke-width="2"/>
+  <text x="125" y="172" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="700">gRPC Layer</text>
+  <text x="125" y="188" text-anchor="middle" fill="#8b949e" font-size="9">Tonic · Prost · TLS</text>
+
+  <!-- gRPC Node 2 -->
+  <rect x="355" y="155" width="190" height="44" rx="6" fill="#0f2a44" stroke="#4A90D9" stroke-width="2"/>
+  <text x="450" y="172" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="700">gRPC Layer</text>
+  <text x="450" y="188" text-anchor="middle" fill="#8b949e" font-size="9">Tonic · Prost · TLS</text>
+
+  <!-- gRPC Node 3 -->
+  <rect x="680" y="155" width="190" height="44" rx="6" fill="#0f2a44" stroke="#4A90D9" stroke-width="2"/>
+  <text x="775" y="172" text-anchor="middle" fill="#4A90D9" font-size="11" font-weight="700">gRPC Layer</text>
+  <text x="775" y="188" text-anchor="middle" fill="#8b949e" font-size="9">Tonic · Prost · TLS</text>
+
+  <!-- gRPC to Raft arrows -->
+  <line x1="125" y1="199" x2="125" y2="233" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+  <line x1="450" y1="199" x2="450" y2="233" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+  <line x1="775" y1="199" x2="775" y2="233" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+
+  <!-- ===== NODE BOXES (outer containers) ===== -->
+  <!-- Node 1 box -->
+  <rect x="18" y="233" width="214" height="295" rx="10" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="125" y="523" text-anchor="middle" fill="#ff6b35" font-size="11" font-weight="700">NODE 1 — LEADER</text>
+
+  <!-- Node 2 box -->
+  <rect x="343" y="233" width="214" height="295" rx="10" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="450" y="523" text-anchor="middle" fill="#8b949e" font-size="11" font-weight="600">NODE 2 — FOLLOWER</text>
+
+  <!-- Node 3 box -->
+  <rect x="668" y="233" width="214" height="295" rx="10" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="775" y="523" text-anchor="middle" fill="#8b949e" font-size="11" font-weight="600">NODE 3 — FOLLOWER</text>
+
+  <!-- ===== RAFT LAYER ===== -->
+  <!-- Raft Node 1 -->
+  <rect x="30" y="240" width="190" height="68" rx="6" fill="#2a1a0a" stroke="#E8913A" stroke-width="2"/>
+  <text x="125" y="260" text-anchor="middle" fill="#E8913A" font-size="11" font-weight="700">Raft Consensus</text>
+  <text x="125" y="276" text-anchor="middle" fill="#8b949e" font-size="9">Term: 3 | Role: Leader</text>
+  <text x="125" y="291" text-anchor="middle" fill="#8b949e" font-size="9">Committed: 1247 | Applied: 1247</text>
+
+  <!-- Raft Node 2 -->
+  <rect x="355" y="240" width="190" height="68" rx="6" fill="#2a1a0a" stroke="#E8913A" stroke-width="2"/>
+  <text x="450" y="260" text-anchor="middle" fill="#E8913A" font-size="11" font-weight="700">Raft Consensus</text>
+  <text x="450" y="276" text-anchor="middle" fill="#8b949e" font-size="9">Term: 3 | Role: Follower</text>
+  <text x="450" y="291" text-anchor="middle" fill="#8b949e" font-size="9">Committed: 1247 | Applied: 1247</text>
+
+  <!-- Raft Node 3 -->
+  <rect x="680" y="240" width="190" height="68" rx="6" fill="#2a1a0a" stroke="#E8913A" stroke-width="2"/>
+  <text x="775" y="260" text-anchor="middle" fill="#E8913A" font-size="11" font-weight="700">Raft Consensus</text>
+  <text x="775" y="276" text-anchor="middle" fill="#8b949e" font-size="9">Term: 3 | Role: Follower</text>
+  <text x="775" y="291" text-anchor="middle" fill="#8b949e" font-size="9">Committed: 1247 | Applied: 1247</text>
+
+  <!-- ===== RAFT REPLICATION ARROWS (between nodes) ===== -->
+  <!-- Node1 → Node2: AppendEntries -->
+  <path d="M 220 268 Q 287 255 355 268" fill="none" stroke="#E8913A" stroke-width="1.8" marker-end="url(#arrowOrange)"/>
+  <text x="287" y="252" text-anchor="middle" fill="#E8913A" font-size="8">AppendEntries</text>
+
+  <!-- Node2 → Node1: ACK -->
+  <path d="M 355 282 Q 287 295 220 282" fill="none" stroke="#f7c948" stroke-width="1.2" marker-end="url(#arrowYellow)" stroke-dasharray="3,2"/>
+  <text x="287" y="300" text-anchor="middle" fill="#f7c948" font-size="7">ACK</text>
+
+  <!-- Node2 → Node3: AppendEntries -->
+  <path d="M 545 268 Q 612 255 680 268" fill="none" stroke="#E8913A" stroke-width="1.8" marker-end="url(#arrowOrange)"/>
+  <text x="612" y="252" text-anchor="middle" fill="#E8913A" font-size="8">AppendEntries</text>
+
+  <!-- Node3 → Node2: ACK -->
+  <path d="M 680 282 Q 612 295 545 282" fill="none" stroke="#f7c948" stroke-width="1.2" marker-end="url(#arrowYellow)" stroke-dasharray="3,2"/>
+  <text x="612" y="300" text-anchor="middle" fill="#f7c948" font-size="7">ACK</text>
+
+  <!-- Raft to Storage arrows -->
+  <line x1="125" y1="308" x2="125" y2="333" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+  <line x1="450" y1="308" x2="450" y2="333" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+  <line x1="775" y1="308" x2="775" y2="333" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+
+  <!-- ===== LSM STORAGE ENGINE ===== -->
+  <!-- Storage Node 1 -->
+  <rect x="30" y="333" width="190" height="165" rx="6" fill="#0a2010" stroke="#4CAF50" stroke-width="2"/>
+  <text x="125" y="354" text-anchor="middle" fill="#4CAF50" font-size="11" font-weight="700">LSM Storage Engine</text>
+
+  <!-- WAL -->
+  <rect x="42" y="362" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+  <text x="125" y="376" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">WAL (Write-Ahead Log)</text>
+  <text x="125" y="389" text-anchor="middle" fill="#8b949e" font-size="8">CRC32 checksums + fsync</text>
+
+  <!-- MemTable -->
+  <rect x="42" y="400" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+  <text x="125" y="414" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">MemTable (BTreeMap)</text>
+  <text x="125" y="427" text-anchor="middle" fill="#8b949e" font-size="8">In-memory writes + MVCC</text>
+
+  <!-- SSTable -->
+  <rect x="42" y="438" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+  <text x="125" y="452" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">SSTables (Bloom filtered)</text>
+  <text x="125" y="465" text-anchor="middle" fill="#8b949e" font-size="8">Background compaction</text>
+
+  <!-- Compaction label -->
+  <text x="125" y="490" text-anchor="middle" fill="#8b949e" font-size="8" font-style="italic">Compaction thread running...</text>
+
+  <!-- Storage Node 2 -->
+  <rect x="355" y="333" width="190" height="165" rx="6" fill="#0a2010" stroke="#4CAF50" stroke-width="2"/>
+  <text x="450" y="354" text-anchor="middle" fill="#4CAF50" font-size="11" font-weight="700">LSM Storage Engine</text>
+  <rect x="367" y="362" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+  <text x="450" y="376" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">WAL (Write-Ahead Log)</text>
+  <text x="450" y="389" text-anchor="middle" fill="#8b949e" font-size="8">CRC32 checksums + fsync</text>
+  <rect x="367" y="400" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+  <text x="450" y="414" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">MemTable (BTreeMap)</text>
+  <text x="450" y="427" text-anchor="middle" fill="#8b949e" font-size="8">In-memory writes + MVCC</text>
+  <rect x="367" y="438" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+  <text x="450" y="452" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">SSTables (Bloom filtered)</text>
+  <text x="450" y="465" text-anchor="middle" fill="#8b949e" font-size="8">Background compaction</text>
+  <text x="450" y="490" text-anchor="middle" fill="#8b949e" font-size="8" font-style="italic">Compaction thread running...</text>
+
+  <!-- Storage Node 3 -->
+  <rect x="680" y="333" width="190" height="165" rx="6" fill="#0a2010" stroke="#4CAF50" stroke-width="2"/>
+  <text x="775" y="354" text-anchor="middle" fill="#4CAF50" font-size="11" font-weight="700">LSM Storage Engine</text>
+  <rect x="692" y="362" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+  <text x="775" y="376" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">WAL (Write-Ahead Log)</text>
+  <text x="775" y="389" text-anchor="middle" fill="#8b949e" font-size="8">CRC32 checksums + fsync</text>
+  <rect x="692" y="400" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+  <text x="775" y="414" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">MemTable (BTreeMap)</text>
+  <text x="775" y="427" text-anchor="middle" fill="#8b949e" font-size="8">In-memory writes + MVCC</text>
+  <rect x="692" y="438" width="166" height="32" rx="4" fill="#122a18" stroke="#4CAF50" stroke-width="1"/>
+  <text x="775" y="452" text-anchor="middle" fill="#4CAF50" font-size="9" font-weight="600">SSTables (Bloom filtered)</text>
+  <text x="775" y="465" text-anchor="middle" fill="#8b949e" font-size="8">Background compaction</text>
+  <text x="775" y="490" text-anchor="middle" fill="#8b949e" font-size="8" font-style="italic">Compaction thread running...</text>
+
+  <!-- ===== CONSISTENT HASH RING (outer arc) ===== -->
+  <ellipse cx="450" cy="395" rx="430" ry="210" fill="none" stroke="#f7c948" stroke-width="1.2" stroke-dasharray="8,5" opacity="0.35"/>
+  <text x="450" y="565" text-anchor="middle" fill="#f7c948" font-size="10" opacity="0.7">Consistent Hash Ring — 150 virtual nodes · RF=3 · SHA-256 placement</text>
+
+  <!-- ===== LEGEND ===== -->
+  <rect x="18" y="543" width="10" height="10" rx="2" fill="#4A90D9"/>
+  <text x="33" y="552" fill="#8b949e" font-size="9">gRPC</text>
+  <rect x="75" y="543" width="10" height="10" rx="2" fill="#E8913A"/>
+  <text x="90" y="552" fill="#8b949e" font-size="9">Raft</text>
+  <rect x="120" y="543" width="10" height="10" rx="2" fill="#4CAF50"/>
+  <text x="135" y="552" fill="#8b949e" font-size="9">LSM Storage</text>
+  <rect x="205" y="543" width="10" height="10" rx="2" fill="#f7c948"/>
+  <text x="220" y="552" fill="#8b949e" font-size="9">Hash Ring</text>
+  <rect x="275" y="543" width="10" height="10" rx="2" fill="#ff6b35"/>
+  <text x="290" y="552" fill="#8b949e" font-size="9">Leader</text>
+
+  <!-- ===== ARROW DEFS ===== -->
+  <defs>
+    <marker id="arrowBlue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#4A90D9"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#E8913A"/>
+    </marker>
+    <marker id="arrowYellow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#f7c948"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#8b949e"/>
+    </marker>
+  </defs>
+</svg>

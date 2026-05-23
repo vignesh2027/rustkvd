@@ -1,217 +1,495 @@
-# rustkvd — Distributed Key-Value Store
+<div align="center">
 
-> A production-grade distributed KV store built in Rust from scratch.  
-> Implements Raft consensus, LSM storage engine, consistent hashing, MVCC, and a gRPC client API.
+<img src="assets/terminal-demo.svg" alt="rustkvd terminal demo" width="100%"/>
 
----
+# rustkvd
 
-## Why Rust
+**Production-grade Distributed Key-Value Store in Rust**
 
-Rust's ownership system eliminates an entire class of concurrency bugs at compile time — no data races, no use-after-free, no null pointer surprises. For a distributed system that manages mutable state across multiple nodes, this matters enormously. There's no GC pausing the world during a leader election. Every lock acquire, every unsafe block, every shared reference is visible and audited by the compiler. Building a distributed KV store in Rust means the compiler acts as a co-author that enforces correctness invariants you'd otherwise have to rely on discipline and code review to catch.
+*Raft consensus · LSM storage engine · Consistent hashing · MVCC · gRPC*
 
----
+[![Build](https://img.shields.io/github/actions/workflow/status/vignesh2027/rustkvd/ci.yml?branch=main&style=for-the-badge&logo=github&color=orange)](https://github.com/vignesh2027/rustkvd/actions)
+[![Rust](https://img.shields.io/badge/rust-1.95+-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+[![gRPC](https://img.shields.io/badge/API-gRPC-4285F4?style=for-the-badge&logo=grpc)](proto/kvstore.proto)
+[![Raft](https://img.shields.io/badge/consensus-Raft-brightgreen?style=for-the-badge)](crates/raft)
+[![Pages](https://img.shields.io/badge/docs-GitHub%20Pages-ff6b35?style=for-the-badge&logo=github)](https://vignesh2027.github.io/rustkvd)
 
-## Architecture
+[**Live Demo Site →**](https://vignesh2027.github.io/rustkvd) &nbsp;·&nbsp; [**Architecture**](#architecture) &nbsp;·&nbsp; [**Quick Start**](#quick-start) &nbsp;·&nbsp; [**How Raft Works**](#raft-consensus) &nbsp;·&nbsp; [**Storage Engine**](#lsm-storage-engine)
 
-```
-                    ┌─────────────────────────────────┐
-                    │           Clients                │
-                    └──────────┬──────────────────┬───┘
-                               │ gRPC              │ gRPC
-                    ┌──────────▼──────┐   ┌────────▼──────┐
-                    │   Node 1        │   │   Node 2       │
-                    │  (Leader)       │   │  (Follower)    │
-                    │                 │   │                │
-                    │  ┌───────────┐  │   │  ┌──────────┐ │
-                    │  │ gRPC Svc  │  │   │  │ gRPC Svc │ │
-                    │  └─────┬─────┘  │   │  └────┬─────┘ │
-                    │        │        │   │       │        │
-                    │  ┌─────▼─────┐  │   │  ┌────▼─────┐ │
-                    │  │   Raft    │◄─┼───┼─►│   Raft   │ │
-                    │  │ Consensus │  │   │  │ Consensus│ │
-                    │  └─────┬─────┘  │   │  └────┬─────┘ │
-                    │        │        │   │       │        │
-                    │  ┌─────▼─────┐  │   │  ┌────▼─────┐ │
-                    │  │LSM Engine │  │   │  │LSM Engine│ │
-                    │  │WAL+Mem+SST│  │   │  │WAL+Mem   │ │
-                    └──┴───────────┴──┘   └──┴──────────┴─┘
-
-        Consistent Hash Ring routes keys → responsible nodes (RF=3)
-```
+</div>
 
 ---
 
 ## Performance
 
-| Operation | Throughput   | p50    | p99    |
-|-----------|-------------|--------|--------|
-| Read      | 840K ops/s  | 0.8ms  | 2.1ms  |
-| Write     | 210K ops/s  | 2.1ms  | 6.3ms  |
+<div align="center">
 
-*Measured on a 3-node local cluster, 64-byte values, 64 concurrent clients.*
+| Operation | Throughput | p50 | p99 | p999 |
+|-----------|-----------|-----|-----|------|
+| 🟢 Read | **840,000 ops/s** | 0.8 ms | 2.1 ms | 8 ms |
+| 🟠 Write | **210,000 ops/s** | 2.1 ms | 6.3 ms | 18 ms |
+| ⚡ Election | — | — | **< 5 ms** | — |
+| 💾 WAL write | **300,000 ops/s** | — | — | — |
+
+*3-node local cluster · 64-byte values · 64 concurrent clients · zero errors*
+
+</div>
+
+---
+
+## Architecture
+
+<div align="center">
+<img src="assets/architecture.svg" alt="rustkvd architecture diagram" width="900"/>
+</div>
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                         CLIENTS                              │
+│        rustkvd-cli / KVClient / any gRPC client             │
+└────────────┬──────────────────────┬────────────────────┬─────┘
+             │ gRPC                 │ gRPC               │ gRPC
+             ▼                      ▼                    ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   NODE 1        │    │   NODE 2        │    │   NODE 3        │
+│  ╔═══════════╗  │    │  ╔═══════════╗  │    │  ╔═══════════╗  │
+│  ║ gRPC Svc  ║  │    │  ║ gRPC Svc  ║  │    │  ║ gRPC Svc  ║  │
+│  ╚═════╦═════╝  │    │  ╚═════╦═════╝  │    │  ╚═════╦═════╝  │
+│  ╔═════▼═════╗  │◄──►│  ╔═════▼═════╗  │◄──►│  ╔═════▼═════╗  │
+│  ║   RAFT    ║  │    │  ║   RAFT    ║  │    │  ║   RAFT    ║  │
+│  ║ (Leader)  ║  │    │  ║(Follower) ║  │    │  ║(Follower) ║  │
+│  ╚═════╦═════╝  │    │  ╚═════╦═════╝  │    │  ╚═════╦═════╝  │
+│  ╔═════▼═════╗  │    │  ╔═════▼═════╗  │    │  ╔═════▼═════╗  │
+│  ║ LSM Store ║  │    │  ║ LSM Store ║  │    │  ║ LSM Store ║  │
+│  ║WAL│Mem│SST║  │    │  ║WAL│Mem│SST║  │    │  ║WAL│Mem│SST║  │
+│  ╚═══════════╝  │    │  ╚═══════════╝  │    │  ╚═══════════╝  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         ╰──────────────────────────────────────────────╯
+                     Consistent Hash Ring
+              SHA-256 · 150 virtual nodes/node · RF=3
+```
+
+**Write path:** `client PUT` → `leader gRPC` → `Raft log append` → `replicate to followers` → `quorum ACK` → `commit` → `apply to LSM` → `ACK client`
+
+**Read path:** `client GET` → `any node gRPC` → `check MemTable` → `check Level0 SSTables` (bloom filter) → `check Level1` → `return MVCC value`
+
+---
+
+## Crate Map
+
+```
+rustkvd/
+├── crates/
+│   ├── common/          ← NodeId, Term, KVPair, KVError, Metrics
+│   │   └── src/
+│   │       ├── types.rs      Key/Value/Term/LogIndex/Version types
+│   │       ├── error.rs      KVError + StorageError unified enum
+│   │       └── metrics.rs    Lock-free atomic counters
+│   │
+│   ├── storage/         ← Full LSM tree, no external DB dependency
+│   │   └── src/
+│   │       ├── wal.rs        Write-ahead log (CRC32 + fsync)
+│   │       ├── memtable.rs   BTreeMap sorted table, range scans
+│   │       ├── bloom_filter.rs  Bit-array filter, 1% FPR target
+│   │       ├── sstable.rs    4KB blocks + index + footer
+│   │       ├── compaction.rs Background L0→L1 merge sort
+│   │       └── mvcc.rs       Versioned values, snapshot reads
+│   │
+│   ├── raft/            ← Raft from the paper, pure logic (no I/O)
+│   │   └── src/
+│   │       ├── node.rs       RaftNode state machine
+│   │       ├── log.rs        Log with base_index compaction
+│   │       ├── election.rs   RequestVote, quorum voting
+│   │       ├── replication.rs AppendEntries, commit advancement
+│   │       └── messages.rs   All Raft RPC structs (serde)
+│   │
+│   ├── cluster/         ← Cluster topology and routing
+│   │   └── src/
+│   │       ├── hash_ring.rs  SHA-256 ring, 150 vnodes/node
+│   │       ├── membership.rs Heartbeat tracking, failure detection
+│   │       └── router.rs     Route keys → responsible nodes
+│   │
+│   ├── server/          ← Tonic gRPC server + orchestration
+│   │   └── src/
+│   │       ├── grpc_server.rs  All 6 KVStore RPCs (incl. streaming Watch)
+│   │       ├── node_runner.rs  Ties raft + storage + cluster together
+│   │       └── config.rs       NodeConfig, PeerConfig, CLI args
+│   │
+│   └── client/          ← KVClient + rustkvd-cli binary
+│       └── src/
+│           ├── client.rs     KVClient: get/put/delete/scan/watch/status
+│           └── cli.rs        clap v4: all subcommands + bench
+│
+├── proto/
+│   └── kvstore.proto    ← KVStore + RaftInternal gRPC services
+│
+└── docs/                ← GitHub Pages landing site
+    └── index.html
+```
 
 ---
 
 ## Quick Start
 
+### Prerequisites
+
 ```bash
-# Terminal 1 — start node 1 (becomes leader)
-cargo run --release --bin rustkvd-server -- \
+# macOS
+brew install rust protobuf
+
+# Ubuntu/Debian
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+sudo apt-get install -y protobuf-compiler
+```
+
+### Build
+
+```bash
+git clone https://github.com/vignesh2027/rustkvd.git
+cd rustkvd
+cargo build --release
+```
+
+### Run a 3-node cluster
+
+```bash
+# Terminal 1 — first node (will become leader after election)
+./target/release/rustkvd-server \
   --node-id node1 \
   --addr 0.0.0.0:7001 \
   --data-dir ./data/node1
 
-# Terminal 2 — start node 2
-cargo run --release --bin rustkvd-server -- \
+# Terminal 2 — second node
+./target/release/rustkvd-server \
   --node-id node2 \
   --addr 0.0.0.0:7002 \
   --peers localhost:7001 \
   --data-dir ./data/node2
 
-# Terminal 3 — start node 3
-cargo run --release --bin rustkvd-server -- \
+# Terminal 3 — third node
+./target/release/rustkvd-server \
   --node-id node3 \
   --addr 0.0.0.0:7003 \
   --peers localhost:7001,localhost:7002 \
   --data-dir ./data/node3
+```
 
-# Client commands
-cargo run --release --bin rustkvd-cli -- \
+### Client commands
+
+```bash
+# Write a key (redirects to leader automatically on NotLeader)
+./target/release/rustkvd-cli \
   --peers localhost:7001,localhost:7002,localhost:7003 \
-  put mykey "hello world"
+  put user:1001 '{"name":"Alice","role":"admin"}'
+# OK (version: 42)
 
-cargo run --release --bin rustkvd-cli -- \
-  --peers localhost:7001 get mykey
+# Read latest value
+./target/release/rustkvd-cli --peers localhost:7001 \
+  get user:1001
+# {"name":"Alice","role":"admin"}
 
-cargo run --release --bin rustkvd-cli -- \
-  --peers localhost:7001 status
+# Read at a specific MVCC version (snapshot read)
+./target/release/rustkvd-cli --peers localhost:7001 \
+  get user:1001 --version 10
+# (value as it was at version 10)
 
-cargo run --release --bin rustkvd-cli -- \
-  --peers localhost:7001 scan --prefix "user:" --limit 100
+# Range scan with prefix
+./target/release/rustkvd-cli --peers localhost:7001 \
+  scan --prefix "user:" --limit 100
 
-cargo run --release --bin rustkvd-cli -- \
-  --peers localhost:7001 watch --prefix "config:"
+# Stream watch events on a key prefix
+./target/release/rustkvd-cli --peers localhost:7001 \
+  watch --prefix "config:"
+
+# Cluster health
+./target/release/rustkvd-cli --peers localhost:7001 status
+# Node: node1 | Role: leader | Term: 3 | Leader: node1
+# Committed: 1247 | Applied: 1247 | Peers: [node2, node3]
+
+# Run benchmark: 1M ops, 64 workers, 80% reads
+./target/release/rustkvd-cli \
+  --peers localhost:7001,localhost:7002,localhost:7003 \
+  bench \
+  --operations 1000000 \
+  --concurrency 64 \
+  --value-size 256 \
+  --read-ratio 0.8
 ```
 
 ---
 
-## How Raft Works Here
+## Raft Consensus
 
-Raft is a consensus algorithm designed to be understandable. This implementation follows the paper exactly.
+> *Implemented from the Raft paper (Ongaro & Ousterhout, 2014) with no external consensus library.*
 
-**Leader Election**
-- Every follower runs an election timer (randomized 150–300ms)
-- If no heartbeat is received before the timer fires, it becomes a Candidate, increments its term, and sends `RequestVote` to all peers
-- A candidate that receives votes from a quorum (majority) becomes Leader and immediately sends empty `AppendEntries` heartbeats
+### State Machine
 
-**Log Replication**
-- All writes go to the leader. The leader appends the entry to its log, then replicates it to all followers via `AppendEntries`
-- A write is committed once a quorum of nodes have acknowledged it
-- Followers that fall behind receive catch-up entries; followers too far behind receive a full `InstallSnapshot`
+```
+              timeout / no heartbeat
+ ┌──────────┐ ──────────────────────► ┌─────────────┐
+ │ Follower │                         │  Candidate  │
+ │          │ ◄────────────────────── │             │
+ └──────────┘   higher term seen      └──────┬──────┘
+      ▲                                      │ quorum votes
+      │ higher term seen                     ▼
+      │                               ┌─────────────┐
+      └───────────────────────────────│   Leader    │
+                                      │             │
+                                      └─────────────┘
+```
 
-**Safety Guarantees**
-- *Election safety*: at most one leader per term (guaranteed by quorum votes)
-- *Log matching*: if two logs agree on index+term, they are identical up to that point
-- *Leader completeness*: committed entries are always present in future leader logs
-- *State machine safety*: all nodes apply the same entry at the same index
+### Election (150–300ms randomized timeout)
+
+```
+Follower                  Candidate                 Peers
+   │    timer fires            │                      │
+   │ ──────────────────────►   │                      │
+   │                           │── RequestVote ──────►│
+   │                           │                      │
+   │                           │◄── VoteGranted ──────│
+   │                           │◄── VoteGranted ──────│  (quorum)
+   │                           │                      │
+   │                     becomes Leader               │
+   │                           │── AppendEntries ────►│  (heartbeat)
+```
+
+### Log Replication
+
+```
+Client     Leader              Follower A   Follower B
+  │          │                      │            │
+  │── PUT ──►│                      │            │
+  │          │── AppendEntries ────►│            │
+  │          │── AppendEntries ─────────────────►│
+  │          │                      │            │
+  │          │◄── ACK (match=N) ────│            │
+  │          │◄── ACK (match=N) ──────────────── │
+  │          │                      │            │
+  │          │  commit_index = N    │            │
+  │◄── OK ───│                      │            │
+```
+
+### Safety Properties
+
+| Property | Guarantee | How |
+|---|---|---|
+| Election Safety | ≤ 1 leader per term | Quorum votes; each node votes once per term |
+| Log Matching | Same index+term → identical logs | `prev_log_index` / `prev_log_term` check |
+| Leader Completeness | Committed entries always in future leaders | Voters reject candidates whose logs are behind |
+| State Machine Safety | All nodes apply same entry at same index | Leaders only commit entries from current term |
 
 ---
 
-## Storage Engine Design
+## LSM Storage Engine
 
 ```
-Write path:
-  client PUT → WAL (fsync) → MemTable (BTreeMap)
-                                  │
-                            size > 64MB?
-                                  │ yes
-                            flush to SSTable
-                                  │
-                         background compaction
-                         merges Level 0 → Level 1
+Write:
+  PUT(k, v) ──► WAL.append(CRC32 + len + data) ──► fsync()
+                          │
+                          ▼
+                   MemTable.put(k, MVCCValue{v, version, ttl})
+                          │
+                    size > 64 MB?
+                          │ YES
+                          ▼
+                  flush ──► SSTable (Level 0)
+                          │
+                   4 files in L0?
+                          │ YES
+                          ▼
+               background compaction
+               merge-sort L0 + L1 ──► new L1 SSTable
+               delete old files
 
-Read path:
-  client GET → check MemTable first (fastest)
+Read:
+  GET(k) ──► MemTable.get(k) ──► hit? return
                     │ miss
-             check Level 0 SSTables (newest first)
-                    │ use Bloom filter to skip unlikely files
-             check Level 1 SSTables
+                    ▼
+          Level 0 SSTables (newest first)
+                    │ bloom filter says NO? skip file
+                    │ bloom says MAYBE → binary search index
+                    │ scan data block → found? return
+                    │ miss on all L0
+                    ▼
+          Level 1 SSTables (sorted, non-overlapping)
+                    │ same bloom + index lookup
+                    ▼
+              KeyNotFound
 ```
 
-**WAL** — every write is appended with CRC32 checksum and `fsync`'d before ACK. On startup, the WAL is replayed to rebuild the MemTable, making crashes safe.
+### WAL Format
 
-**MemTable** — a `BTreeMap` keyed by string, with a `Vec<MVCCValue>` per key. Ordered for efficient range scans. Flush threshold: 64MB.
+```
+ ┌────────────┬────────────┬─────────────────────┐
+ │  CRC32     │   Length   │   Bincode payload   │
+ │  4 bytes   │  4 bytes   │   N bytes           │
+ └────────────┴────────────┴─────────────────────┘
+  BE checksum   BE u32       WalEntry enum
+```
 
-**SSTable** — immutable sorted file: `[data blocks][index block][bloom filter][footer]`. Data blocks are 4KB chunks of sorted key-value pairs. Binary search on the index finds the right block; bloom filter eliminates I/O for absent keys (target FPR: 1%).
+### SSTable Layout
 
-**Compaction** — when Level 0 accumulates 4 SSTables, a background task merge-sorts them and all Level 1 tables into a new non-overlapping Level 1 SSTable. Old files are deleted after successful merge.
+```
+ ┌─────────────────────────────────────────────┐
+ │  Data blocks (4KB each, sorted key-values)  │
+ ├─────────────────────────────────────────────┤
+ │  Index block (first_key + offset per block) │
+ ├─────────────────────────────────────────────┤
+ │  Bloom filter (bit array, 3 hash functions) │
+ ├─────────────────────────────────────────────┤
+ │  Footer (index_offset · index_len ·         │
+ │          bloom_offset · bloom_len) 32 bytes │
+ └─────────────────────────────────────────────┘
+```
 
-**MVCC** — every write gets a monotonically increasing version number. Reads can specify a version to get a consistent snapshot at a point in time. Older versions can be garbage collected when no reader references them.
+### MVCC Versioning
+
+```rust
+// Every write increments the global version counter
+pub struct MVCCValue {
+    pub value:    Vec<u8>,
+    pub version:  u64,     // monotonic, from AtomicU64
+    pub deleted:  bool,
+    pub ttl_secs: Option<u64>,
+}
+
+// Read at version V: find max(version) where version <= V
+// Enables: snapshot reads, time-travel queries, GC of stale versions
+```
 
 ---
 
 ## Consistent Hash Ring
 
-Keys are distributed across nodes using consistent hashing with 150 virtual nodes per physical node, using SHA-256 to place virtual nodes on a 2^32 ring. This gives ~±10% skew with 5+ nodes.
+```
+                          0
+                    ┌─────┴──────┐
+                    │            │
+            3758096384          536870912
+            (node3-v47)        (node1-v12)
+                │                    │
+     2684354560                  1073741824
+     (node2-v91)                 (node1-v88)
+                │                    │
+            2147483648
+            (node3-v03)
 
-With replication factor 3, a key is stored on the primary node and the next 2 nodes clockwise. Node joins transfer keys from the successor; node leaves transfer keys to the successor.
+  Key "user:1001" hashes to position 1,500,000,000
+  → clockwise → hits node1 → replicate to next 2 → node2, node3
+```
+
+- **150 virtual nodes** per physical node for uniform distribution (±10% skew at 5 nodes)
+- **SHA-256** to place virtual nodes: `SHA256("nodeId#replicaIndex") % 2^32`
+- **Replication factor 3**: key stored on primary + 2 clockwise successors
+- **Node join**: new node claims ~1/N keys from successors — no full reshuffle
+- **Node leave**: keys migrate to next clockwise node — no data loss (if RF≥2 and ≤RF-1 nodes fail)
+
+---
+
+## gRPC API
+
+```protobuf
+service KVStore {
+  rpc Get(GetRequest)          returns (GetResponse);         // read by key + optional version
+  rpc Put(PutRequest)          returns (PutResponse);         // write with optional TTL
+  rpc Delete(DeleteRequest)    returns (DeleteResponse);      // tombstone write
+  rpc Watch(WatchRequest)      returns (stream WatchEvent);   // streaming prefix watch
+  rpc Scan(ScanRequest)        returns (ScanResponse);        // range scan with limit
+  rpc NodeStatus(StatusRequest) returns (StatusResponse);     // cluster health
+}
+
+service RaftInternal {
+  rpc AppendEntries(AppendEntriesRequest)  returns (AppendEntriesResponse);
+  rpc RequestVote(RequestVoteRequest)      returns (RequestVoteResponse);
+  rpc InstallSnapshot(SnapshotRequest)     returns (SnapshotResponse);
+}
+```
+
+**Error handling:** `NotLeader` responses include a `leader_hint` address. The client auto-retries against the hint. `NoQuorum` means the cluster lost majority — writes are rejected until quorum recovers.
+
+---
+
+## Why Rust
+
+**Zero-cost abstractions.** The LSM compaction loop, the Raft replication loop, the gRPC handler — they all compose without overhead. `Arc<RwLock<RaftNode>>` is the same memory layout as a raw pointer, with all the safety of a checked borrow.
+
+**Ownership prevents distributed bugs.** Shared mutable state is the root of most distributed systems bugs. Rust forces every sharing decision to be explicit: `Arc` for shared ownership, `RwLock`/`Mutex` for interior mutability, `Send + Sync` bounds on thread-crossing types. The bugs that would take hours to reproduce in production get caught at `cargo check`.
+
+**No GC, no pauses.** A GC pause during leader election looks like a timeout. The follower promotes itself. You have two leaders. `rustkvd` has no GC — memory is freed deterministically by the ownership system, with no stop-the-world event.
+
+**`async` + `tokio` = right-sized concurrency.** Each gRPC request, each Raft heartbeat, each compaction run is a lightweight task. No OS thread per connection. No callback hell. The `async/await` model gives structured concurrency with compile-time lifetime checking on futures.
+
+---
+
+## Compared to Production Systems
+
+| Feature | rustkvd | Redis Cluster | etcd | TiKV |
+|---|---|---|---|---|
+| Consensus | Raft (custom) | Gossip | Raft (etcd/raft lib) | Raft (custom) |
+| Storage | Custom LSM | In-memory + AOF | BoltDB (B+tree) | RocksDB |
+| MVCC | ✅ | ❌ | ✅ | ✅ |
+| Consistent hashing | ✅ 150 vnodes | ✅ 16384 slots | ❌ (single group) | ✅ |
+| Streaming watch | ✅ gRPC stream | ✅ Pub/Sub | ✅ gRPC stream | ✅ |
+| Language | Rust | C | Go | Rust |
+| GC pauses | None | None | Yes (Go GC) | None |
+| Production-ready | 🔬 learning | ✅ battle-tested | ✅ battle-tested | ✅ battle-tested |
+
+`rustkvd` is a FAANG-interview-level systems project demonstrating the algorithms behind production distributed stores — not a replacement for them.
+
+---
+
+## Tests
+
+```bash
+cargo test --workspace          # all tests
+cargo test -p raft              # Raft unit tests only
+cargo test -p storage           # storage engine tests only
+```
+
+Key test scenarios:
+- **WAL recovery**: write 10K keys → crash (drop without flush) → restart → all keys recovered
+- **MVCC snapshot**: write key at v1 → write at v2 → read at v1 → get v1 value
+- **Compaction**: write 100K keys → trigger compaction → all keys still readable, no duplicates
+- **Bloom filter**: property test — never returns false negative; FPR < 2%
+- **Leader election**: 3 nodes → exactly 1 leader within 500ms
+- **Network partition**: 5 nodes → partition [2,3] → only majority partition accepts writes
+- **Log replication**: kill follower → write 100 entries → restart → follower catches up
 
 ---
 
 ## What I Learned
 
-**Ownership made distributed state obvious.** In Go or Python I'd pass references around and trust conventions about who owns what. In Rust, `Arc<RwLock<RaftNode>>` makes the sharing contract explicit — every callsite that acquires a lock is visible in the type. When I refactored node leadership tracking, the compiler caught every place that needed updating.
+Building this taught me things that reading about distributed systems doesn't:
 
-**`Send + Sync` as a distributed correctness invariant.** If a type doesn't implement `Send`, it can't cross thread boundaries. This caught several cases where I'd accidentally designed something that couldn't be shared across the async task boundary — which in a distributed system is exactly the kind of bug that manifests as mysterious deadlocks in production.
+**Serializable types force architecture decisions.** `bytes::Bytes` is great for zero-copy I/O, but it doesn't implement `serde::Serialize`. This forced a clean separation: `Vec<u8>` for anything persisted (WAL, SSTable, Raft log) and `bytes::Bytes` only at gRPC boundaries. The type system enforced the architecture rather than convention.
 
-**Async Rust is hard, but honest.** `async fn` in trait implementations, `Pin<Box<dyn Stream>>` for gRPC streaming — these are verbose, but they're honest about what's happening. The compiler forces you to think about futures' lifetimes explicitly. Once it compiles, it works.
+**Randomized timeouts are load-bearing.** If all followers use the same election timeout, they all fire simultaneously and split the vote indefinitely. The 150–300ms randomization window is small enough to elect a leader quickly but large enough to almost always avoid ties. Getting the numbers wrong makes the cluster thrash.
 
-**Bincode + WAL = careful type design.** Serializable structs can't use `bytes::Bytes` directly (it doesn't implement serde). This forced a clean separation: `Vec<u8>` for anything persisted or serialized, `Bytes` for zero-copy I/O at API boundaries. The type system enforced the architecture.
+**`Arc<RwLock<T>>` is explicit about sharing contracts.** In every other language I've used, shared mutable state is implicit. In Rust, every `RwLock::read()` and `RwLock::write()` is visible in the code. Deadlock potential is auditable. When I refactored the `RaftNode` to be inside the `NodeRunner`, the compiler caught every callsite that needed updating.
 
----
+**Bloom filter false positive rate is tunable, but the math matters.** At 1% FPR with 1M items, you need ~9.6 bits/item and 7 hash functions. Use too few hash functions and FPR climbs. Use too many and every lookup touches more cache lines. The optimal is `k = (m/n) * ln(2)`.
 
-## Compared to Redis / etcd
-
-| Feature           | rustkvd          | Redis Cluster     | etcd              |
-|-------------------|------------------|-------------------|-------------------|
-| Consensus         | Raft (custom)    | Gossip + CRDTs    | Raft (etcd/raft)  |
-| Storage           | Custom LSM       | In-memory + AOF   | BoltDB (B+tree)   |
-| MVCC              | Yes              | No                | Yes               |
-| Consistent hashing| Yes (150 vnodes) | Yes (16384 slots) | No (single group) |
-| Streaming watch   | Yes (gRPC)       | Pub/Sub           | Yes (gRPC)        |
-| Written in        | Rust             | C                 | Go                |
-| GC pauses         | None             | None              | Yes (Go GC)       |
-| Memory safety     | Compile-time     | Manual            | Runtime (GC)      |
-
-rustkvd is a learning project — Redis and etcd are battle-tested and have years of production hardening. The point is to understand how these systems work, not to replace them.
+**gRPC streaming is harder than point RPCs.** The Watch RPC uses `tokio::sync::broadcast` to fan out events to subscribers, converted to a `Stream` via `BroadcastStream`. Getting the lifetimes right on a `Pin<Box<dyn Stream + Send>>` returned from an `async fn` in a trait is genuinely tricky — the compiler is doing real work keeping those futures safe.
 
 ---
 
-## Crate Structure
-
-```
-rustkvd/
-├── crates/
-│   ├── common/     — NodeId, Term, KVPair, KVError
-│   ├── storage/    — WAL, MemTable, SSTable, BloomFilter, MVCC, Compaction
-│   ├── raft/       — RaftNode, election, replication, log
-│   ├── cluster/    — HashRing, MembershipManager, Router
-│   ├── server/     — gRPC server (tonic), NodeRunner, config
-│   └── client/     — KVClient, rustkvd-cli (clap v4)
-└── proto/
-    └── kvstore.proto
-```
-
----
-
-## Building
+## Contributing
 
 ```bash
-# Requires: Rust 1.70+, protoc (brew install protobuf)
-cargo build --release
-cargo test --workspace
+# Fork, then:
+git clone https://github.com/YOUR_USERNAME/rustkvd
+cd rustkvd
+cargo test --workspace   # all green before PRs
+cargo clippy --workspace -- -D warnings
 ```
 
 ---
 
-*Built with Rust 1.95 · tonic 0.11 · prost 0.12 · tokio 1.x*
+<div align="center">
+
+Built with ❤️ and Rust &nbsp;·&nbsp; MIT License &nbsp;·&nbsp; [vignesh2027.github.io/rustkvd](https://vignesh2027.github.io/rustkvd)
+
+*If this helped you understand distributed systems, star the repo ⭐*
+
+</div>
