@@ -1,0 +1,21 @@
+[package]
+name = "raft"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+common = { path = "../common" }
+storage = { path = "../storage" }
+tokio = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+rand = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
