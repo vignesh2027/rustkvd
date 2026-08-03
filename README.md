@@ -4,9 +4,11 @@
 
 # rustkvd
 
-**Production-grade Distributed Key-Value Store in Rust**
+**A distributed key-value store I built from scratch in Rust.**
 
-*Raft consensus · LSM storage engine · Consistent hashing · MVCC · gRPC*
+I built rustkvd to learn distributed systems the hard way — by implementing the
+hard parts myself: Raft consensus, an LSM storage engine, consistent hashing,
+MVCC, and a gRPC API.
 
 [![Build](https://img.shields.io/github/actions/workflow/status/vignesh2027/rustkvd/ci.yml?branch=main&style=for-the-badge&logo=github&color=orange)](https://github.com/vignesh2027/rustkvd/actions)
 [![Rust](https://img.shields.io/badge/rust-1.95+-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org)
